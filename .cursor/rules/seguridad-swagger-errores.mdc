@@ -1,0 +1,28 @@
+---
+description: Seguridad backend, Swagger, errores y auditoría (veterinaria-api)
+alwaysApply: true
+---
+
+# Seguridad, Swagger y errores (veterinaria-api)
+
+## Seguridad
+
+- **No confiar en el cliente**: toda regla y permiso se validan en servidor (guards + BLL/DAL con contexto de actor).
+- **Autenticación/autorización**: JWT (u otra decisión del proyecto) + **roles** (cliente, veterinario, recepcionista, administrador). Proteger endpoints con guards; evitar IDOR (filtrar por `userId`/`ownerId` en DAL según política).
+- **Secretos**: solo variables de entorno / config validada al arranque; nunca commitear secretos ni loguearlos.
+- **Errores HTTP**: respuestas controladas; **no** exponer stack traces, mensajes internos de DB ni detalles de implementación al cliente.
+- **Rate limiting**: considerar en login, registro, reservas públicas y webhooks según evolución del proyecto.
+- **Pagos e inventario**: idempotencia donde aplique; webhooks verificados; operaciones de stock en transacciones con estrategia clara frente a concurrencia.
+
+## Validación
+
+- Preferir validación en **DTO**; whitelist de propiedades; tipos y rangos explícitos.
+
+## Swagger
+
+- Documentar endpoints y DTOs expuestos; ejemplos mínimos en operaciones sensibles.
+- Mantener DTOs alineados con lo que realmente acepta/devuelve la API.
+
+## Trazabilidad
+
+- Acciones sensibles (citas, clínica, inventario, pagos manuales, cambios de rol) deben dejar **auditoría** (`audit_logs` o equivalente) sin volcar datos clínicos innecesarios en logs públicos.

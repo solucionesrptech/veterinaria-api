@@ -1,0 +1,186 @@
+---
+description: Flujo de trabajo, control de cambios y consistencia (veterinaria-api)
+alwaysApply: true
+---
+
+# Flujo de trabajo y control de arquitectura (veterinaria-api)
+
+## Regla principal
+
+Este proyecto no es de generación rápida de código.
+
+Primero se analiza, luego se diseña y recién después se implementa.
+
+Prohibido construir directamente sin análisis previo.
+
+## Flujo obligatorio de trabajo
+
+Antes de escribir código, siempre:
+
+1. Analizar el requerimiento
+2. Identificar módulo o flujo afectado
+3. Verificar si ya existe estructura relacionada
+4. Definir:
+   - DTOs necesarios
+   - métodos de Facade
+   - reglas de negocio en BLL
+   - operaciones DAL
+   - restricciones de integridad en base de datos si aplican
+5. Evaluar impacto en:
+   - seguridad
+   - base de datos
+   - integraciones
+   - contratos existentes
+6. Recién después generar código
+
+Si falta contexto crítico, detener y pedir información.
+
+## Regla de modificación de código
+
+- No romper código existente sin justificación explícita
+- No mover archivos de capa sin razón clara
+- No cambiar contratos (DTOs) sin indicar impacto
+- No hacer refactors masivos sin que se solicite
+- Siempre preferir cambios mínimos, controlados y reversibles
+
+## Regla de uso de módulos
+
+- Cada funcionalidad pertenece a un módulo
+- No mezclar lógica entre módulos sin pasar por Facade
+- Si un módulo necesita otro:
+  - usar Facade del módulo destino
+  - nunca acceder directamente a su DAL
+
+## Regla estricta de Facade
+
+- Todo caso de uso debe pasar por Facade
+- Facade es el único punto de orquestación
+- Facade coordina BLL, DAL e integraciones externas si aplica
+- Facade no contiene lógica de negocio pesada
+- Facade no ejecuta queries Prisma
+- Facade no reemplaza responsabilidades de DAL
+
+Prohibido:
+- Controller → BLL directo
+- Controller → DAL
+- Prisma fuera de DAL
+
+## Regla estricta de BLL
+
+- La BLL contiene reglas de negocio, invariantes y políticas
+- La BLL no depende de DAL
+- La BLL no usa Prisma
+- La BLL no conoce detalles de persistencia
+- La BLL debe poder probarse con datos simulados sin depender de base de datos real
+
+## Transacciones y consistencia
+
+Cualquier operación que afecte múltiples entidades debe considerar consistencia.
+
+Ejemplos obligatorios:
+- creación de cita
+- confirmación de cita
+- check-in
+- generación de orden
+- pago
+- actualización de inventario
+
+Reglas:
+- las transacciones se ejecutan en DAL usando Prisma
+- la Facade coordina la operación completa
+- la BLL define reglas de consistencia e invariantes
+- no dividir operaciones críticas en múltiples llamadas sin transacción
+- no mover detalles de persistencia o transacción a Controller, Facade o BLL
+
+## Concurrencia
+
+Debe prevenirse:
+- doble reserva de cita para mismo veterinario y horario
+- inconsistencias de stock
+- doble pago
+- duplicación de operaciones críticas
+
+Usar de forma complementaria:
+- constraints e índices en DB cuando aplique
+- validaciones de negocio en BLL
+- transacciones en DAL
+- estrategia explícita frente a concurrencia
+
+No confiar solo en validación de aplicación si la base de datos puede proteger integridad crítica.
+
+## Idempotencia
+
+Aplicar en:
+- pagos
+- webhooks
+- confirmaciones críticas
+- operaciones reintentables
+
+Objetivo:
+- evitar duplicación de operaciones
+- tolerar reintentos sin efectos colaterales indebidos
+
+## Logs y auditoría
+
+Registrar acciones sensibles:
+- creación o modificación de citas
+- acciones clínicas
+- movimientos de inventario
+- pagos manuales
+- cambios de roles
+- cambios sensibles de estado
+
+Reglas:
+- no incluir datos sensibles innecesarios en logs
+- distinguir logs técnicos de auditoría funcional
+- la auditoría debe permitir trazabilidad sin exponer información clínica innecesaria
+
+## Regla de DTO
+
+- DTO define el contrato de entrada
+- validación obligatoria
+- whitelist de propiedades
+- trim solo en DTO
+- sanitización mínima solo en DTO
+
+Prohibido:
+- validar formato en Controller, Facade, BLL o DAL
+- hacer trim en Controller, Facade, BLL o DAL
+
+## Regla de validaciones por capa
+
+- DTO: formato, tipos, enums, rangos, sanitización mínima, trim
+- BLL: reglas de negocio, invariantes, políticas, transiciones de estado
+- DAL: persistencia, queries, transacciones
+- Base de datos: integridad, unique, foreign keys, not null, índices y restricciones
+
+No mezclar validaciones de una capa con otra.
+
+## Regla de crecimiento del sistema
+
+Antes de crear algo nuevo:
+- verificar si ya existe algo reutilizable
+- evitar duplicación de lógica
+- mantener consistencia con módulos existentes
+- no introducir abstracciones genéricas sin necesidad real
+
+## Regla de calidad
+
+- funciones pequeñas
+- nombres claros
+- evitar abstracciones innecesarias
+- no crear helpers genéricos sin necesidad real
+- mantener separación estricta de responsabilidades
+- preferir explicitud sobre ambigüedad
+
+## Regla final
+
+Si una implementación rompe:
+- arquitectura
+- seguridad
+- consistencia
+- separación de capas
+- independencia de la BLL respecto al DAL
+- regla de trim solo en DTO
+
+debe ser rechazada y rediseñada antes de continuar.
