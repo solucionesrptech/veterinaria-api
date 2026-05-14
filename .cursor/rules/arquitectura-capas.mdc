@@ -1,0 +1,142 @@
+---
+description: Arquitectura obligatoria NestJS con Facade como orquestador, BLL desacoplada de DAL y Prisma solo en DAL
+alwaysApply: true
+---
+
+# Arquitectura y capas (veterinaria-api)
+
+## Flujo obligatorio
+
+Arquitectura obligatoria:
+
+- **Controller** solo puede llamar a **Facade**
+- **Facade** es el único punto de orquestación del caso de uso
+- **Facade** coordina **BLL**, **DAL** e integraciones externas si aplica
+- **BLL** contiene lógica de negocio e invariantes
+- **BLL no depende de DAL**
+- **BLL no usa Prisma ni conoce detalles de persistencia**
+- **DAL** contiene acceso a datos con Prisma
+- **DAL no contiene lógica de negocio**
+- **Solo DAL** accede a la base de datos
+
+**Prohibido**:
+- Controller → BLL
+- Controller → DAL
+- BLL → DAL
+- uso de Prisma fuera de DAL
+
+## Prisma
+
+- **Prisma**: únicamente dentro de archivos `*.dal.ts` del módulo y en `schema.prisma` / migraciones
+- **Prohibido** importar `PrismaClient` o tipos de persistencia en BLL, Facade o Controller
+
+## Objetivo arquitectónico
+
+- La lógica de negocio debe poder probarse con datos simulados sin depender de una base de datos real
+- Cambiar la tecnología de persistencia no debe romper la BLL
+- La Facade coordina capas; no las fusiona
+
+## Responsabilidades por capa
+
+### Controller
+- HTTP, status codes, guards, pipes, serialización
+- usa DTO de entrada/salida
+- sin lógica de negocio
+- sin acceso a datos
+- sin Prisma
+
+### DTO
+- validación de formato (`class-validator` o equivalente)
+- sanitización mínima
+- `trim` o normalización ligera de strings **solo aquí**
+- prohibido hacer `trim` o normalización de strings en Controller, Facade, BLL o DAL
+
+### Facade
+- orquesta el caso de uso
+- coordina BLL, DAL e integraciones externas (correo, pagos, etc.) si aplica
+- puede coordinar transacciones de aplicación apoyándose en DAL
+- sin lógica de negocio pesada
+- sin queries Prisma
+- sin acceso directo a persistencia fuera de DAL
+
+### BLL
+- invariantes
+- políticas
+- transiciones de estado
+- validaciones de dominio
+- reglas de negocio
+- sin Prisma
+- sin SQL
+- sin detalles de persistencia
+- sin dependencia de DAL
+- no sanitiza formato
+
+### DAL
+- consultas
+- transacciones
+- mapeo hacia/desde modelos persistidos
+- acceso a datos con Prisma
+- sin reglas de negocio
+- sin decisiones de dominio
+- sin `trim`
+
+## Regla de validaciones
+
+Cada validación vive en su capa correcta:
+
+- **DTO**: formato, tipos, enums, rangos, sanitización mínima, `trim`
+- **BLL**: reglas de negocio e invariantes
+- **DAL**: persistencia y transacciones
+- **Base de datos**: integridad, `unique`, `not null`, foreign keys, índices y restricciones
+
+Reglas obligatorias:
+- `trim` **solo en DTO**
+- BLL no sanitiza
+- DAL no valida negocio
+- una regla de negocio no debe quedar solo en frontend
+- una restricción crítica de integridad no debe quedar solo en aplicación si la base de datos puede protegerla
+
+## Estructura modular
+
+Organizar por dominio bajo `src/modules/<nombre>/`:
+
+`controllers/`, `dtos/`, `facades/`, `bll/`, `dal/`, `entities/`, `types/`, `enums/`, `mappers/`
+
+Código transversal en `src/common/`:
+`guards/`, `interceptors/`, `filters/`, `pipes/`, `exceptions/`, `decorators/`, `utils/`, `constants/`
+
+## Convención de nombres de archivo
+
+- `create-<recurso>.dto.ts`
+- `update-<recurso>.dto.ts`
+- `<recurso>.controller.ts`
+- `<recurso>.facade.ts`
+- `<recurso>.bll.ts`
+- `<recurso>.dal.ts`
+
+Reglas:
+- un archivo por responsabilidad clara
+- evitar archivos gigantes
+- evitar helpers genéricos acumulativos
+- mantener coherencia por módulo
+
+## Calidad
+
+- principios **SOLID** y **Clean Code**
+- funciones pequeñas
+- separación estricta de responsabilidades
+- no mezclar persistencia en Facade o BLL
+- no mezclar negocio en DAL o Controller
+- no usar notación ambigua como definición arquitectónica principal
+
+## Regla final
+
+Si una implementación rompe alguna de estas condiciones:
+- BLL depende de DAL
+- Prisma aparece fuera de DAL
+- Facade deja de ser el orquestador
+- `trim` aparece fuera de DTO
+- DAL toma decisiones de negocio
+- Controller contiene lógica de negocio
+
+la implementación debe rechazarse y rediseñarse antes de continuar.
